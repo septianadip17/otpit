@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import {
   Alert,
@@ -15,18 +14,24 @@ import {
   loadClothingItems,
   saveClothingItems,
 } from "./src/services/clothingStorage";
+import {
+  saveClothingImage,
+  deleteClothingImage,
+} from "./src/services/clothingImageStorage";
 import type { ClothingItem } from "./src/types/clothing";
 
 import ActionButton from "./src/components/ActionButton";
-import BottomNav, {
-  type TabName,
-} from "./src/components/BottomNav";
+import BottomNav, { type TabName } from "./src/components/BottomNav";
 import ClothingFormModal, {
   type ClothingFormData,
 } from "./src/features/wardrobe/ClothingFormModal";
 import WardrobeScreen from "./src/features/wardrobe/WardrobeScreen";
 import ProfileModal from "./src/features/profile/ProfileModal";
 import StatisticsModal from "./src/features/statistics/StatisticsModal";
+
+function createId() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
 
 export default function App() {
   const { width } = useWindowDimensions();
@@ -47,7 +52,10 @@ export default function App() {
     async function load() {
       try {
         const savedItems = await loadClothingItems();
-        if (mounted) setItems(savedItems);
+
+        if (mounted) {
+          setItems(savedItems);
+        }
       } catch {
         if (mounted) {
           Alert.alert(
@@ -88,55 +96,149 @@ export default function App() {
     setIsFormVisible(true);
   }
 
-  function handleSave(
+  async function handleSave(
     form: ClothingFormData,
     editingId: string | null,
-  ) {
+  ): Promise<void> {
     const now = new Date().toISOString();
 
+    const existingItem = editingId
+      ? items.find((entry) => entry.id === editingId)
+      : undefined;
+
+    const previousPhotos = Array.from(
+      new Set([
+        ...(existingItem?.imageUris ?? []),
+        ...(existingItem?.imageUri ? [existingItem.imageUri] : []),
+      ]),
+    );
+
+    let imageUris = previousPhotos;
+    const newlySavedImageUris: string[] = [];
+
+    if (form.photosChanged) {
+      imageUris = [];
+
+      try {
+        for (const photo of form.photos) {
+          if (photo.isNew) {
+            const savedUri = await saveClothingImage(photo.uri, createId());
+
+            newlySavedImageUris.push(savedUri);
+            imageUris.push(savedUri);
+          } else {
+            imageUris.push(photo.uri);
+          }
+        }
+      } catch {
+        await Promise.all(
+          newlySavedImageUris.map((uri) =>
+            deleteClothingImage(uri).catch(() => undefined),
+          ),
+        );
+
+        throw new Error("Sebagian foto gagal disimpan. Coba pilih foto lagi.");
+      }
+    }
+
+    const imageUri = imageUris[0] ?? null;
+
+    let nextItems: ClothingItem[];
+
     if (editingId) {
-      setItems((current) =>
-        current.map((item) =>
-          item.id === editingId
-            ? {
-                ...item,
-                name: form.name,
-                categoryId: form.categoryId,
-                subcategoryId: form.subcategoryId,
-                color: form.color,
-                notes: form.notes,
-                updatedAt: now,
-              }
-            : item,
-        ),
+      nextItems = items.map((entry) =>
+        entry.id === editingId
+          ? {
+              ...entry,
+              name: form.name,
+              categoryId: form.categoryId,
+              subcategoryId: form.subcategoryId,
+              color: form.color,
+              notes: form.notes,
+              imageUri,
+              imageUris,
+              updatedAt: now,
+            }
+          : entry,
       );
     } else {
       const newItem: ClothingItem = {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+        id: createId(),
         name: form.name,
         categoryId: form.categoryId,
         subcategoryId: form.subcategoryId,
         color: form.color,
-        imageUri: null,
         notes: form.notes,
+        imageUri,
+        imageUris,
         createdAt: now,
         updatedAt: now,
       };
 
-      setItems((current) => [newItem, ...current]);
+      nextItems = [newItem, ...items];
     }
 
+    try {
+      await saveClothingItems(nextItems);
+    } catch {
+      await Promise.all(
+        newlySavedImageUris.map((uri) =>
+          deleteClothingImage(uri).catch(() => undefined),
+        ),
+      );
+
+      throw new Error("Barang gagal disimpan. Coba lagi.");
+    }
+
+    setItems(nextItems);
     setIsFormVisible(false);
     setEditingItem(null);
+
+    // Bersihkan foto yang sudah dilepas dari barang setelah metadata
+    // berhasil tersimpan. Foto yang masih dipakai tidak ikut dihapus.
+    const retainedPhotos = new Set(imageUris);
+
+    await Promise.all(
+      previousPhotos
+        .filter((uri) => !retainedPhotos.has(uri))
+        .map((uri) => deleteClothingImage(uri).catch(() => undefined)),
+    );
   }
 
-  function confirmDelete() {
+  async function confirmDelete() {
     if (!deleteItem) return;
 
-    setItems((current) =>
-      current.filter((item) => item.id !== deleteItem.id),
-    );
-    setDeleteItem(null);
+    const itemToDelete = deleteItem;
+    const nextItems = items.filter((entry) => entry.id !== itemToDelete.id);
+
+    try {
+      await saveClothingItems(nextItems);
+      setItems(nextItems);
+      setDeleteItem(null);
+
+      try {
+        const photosToDelete = Array.from(
+          new Set([
+            ...(itemToDelete.imageUris ?? []),
+            ...(itemToDelete.imageUri ? [itemToDelete.imageUri] : []),
+          ]),
+        );
+
+        await Promise.all(
+          photosToDelete.map((uri) => deleteClothingImage(uri)),
+        );
+      } catch {
+        Alert.alert(
+          "Barang terhapus",
+          "Barang berhasil dihapus, tetapi file foto lama belum berhasil dibersihkan.",
+        );
+      }
+    } catch {
+      Alert.alert(
+        "Gagal menghapus",
+        "Barang belum berhasil dihapus dari penyimpanan.",
+      );
+    }
   }
 
   function navigate(tab: TabName) {
@@ -149,10 +251,7 @@ export default function App() {
 
   return (
     <View className="flex-1 bg-[#F8F7F2]">
-      <StatusBar
-        barStyle="dark-content"
-        backgroundColor="#F8F7F2"
-      />
+      <StatusBar barStyle="dark-content" backgroundColor="#F8F7F2" />
 
       <View className="flex-1">
         <WardrobeScreen
@@ -208,7 +307,6 @@ export default function App() {
         }}
       />
 
-      {/* Konfirmasi hapus barang */}
       {deleteItem && (
         <View className="absolute inset-0 z-20 items-center justify-center bg-black/30 px-6">
           <View className="w-full max-w-sm rounded-3xl bg-[#F8F7F2] p-6">
@@ -218,6 +316,7 @@ export default function App() {
             <Text className="mt-3 text-sm leading-6 text-[#858B83]">
               "{deleteItem.name}" akan dihapus dari koleksi perangkat ini.
             </Text>
+
             <View className="mt-6 flex-row gap-3">
               <View className="flex-1">
                 <ActionButton
@@ -226,15 +325,14 @@ export default function App() {
                   onPress={() => setDeleteItem(null)}
                 />
               </View>
+
               <View className="flex-1">
                 <Pressable
                   accessibilityRole="button"
-                  onPress={confirmDelete}
+                  onPress={() => void confirmDelete()}
                   className="items-center justify-center rounded-xl bg-[#9A5146] px-4 py-3"
                 >
-                  <Text className="text-sm font-bold text-white">
-                    Hapus
-                  </Text>
+                  <Text className="text-sm font-bold text-white">Hapus</Text>
                 </Pressable>
               </View>
             </View>

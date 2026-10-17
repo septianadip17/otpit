@@ -1,5 +1,5 @@
-
 import { useMemo, useState } from "react";
+import ClothingPhotoViewer from "./ClothingPhotoViewer";
 import {
   ActivityIndicator,
   Pressable,
@@ -15,11 +15,9 @@ import {
   CATEGORY_LABELS,
   SUBCATEGORY_EMOJIS,
 } from "../../constants/wardrobe";
-import type {
-  ClothingCategoryId,
-  ClothingItem,
-} from "../../types/clothing";
+import type { ClothingCategoryId, ClothingItem } from "../../types/clothing";
 import ActionButton from "../../components/ActionButton";
+import ClothingPhoto from "../../components/ClothingPhoto";
 
 type Props = {
   items: ClothingItem[];
@@ -48,7 +46,7 @@ export default function WardrobeScreen({
   const [activeCategory, setActiveCategory] = useState<
     ClothingCategoryId | "all"
   >("all");
-
+  const [viewingItem, setViewingItem] = useState<ClothingItem | null>(null);
   const filteredItems = useMemo(() => {
     const query = search.trim().toLowerCase();
 
@@ -62,8 +60,7 @@ export default function WardrobeScreen({
       );
 
       const matchesCategory =
-        activeCategory === "all" ||
-        item.categoryId === activeCategory;
+        activeCategory === "all" || item.categoryId === activeCategory;
 
       const text = [
         item.name,
@@ -79,7 +76,20 @@ export default function WardrobeScreen({
       return matchesCategory && text.includes(query);
     });
   }, [items, search, activeCategory]);
-
+  <ClothingPhotoViewer
+    visible={viewingItem !== null}
+    title={viewingItem?.name ?? "Foto pakaian"}
+    photos={
+      viewingItem
+        ? viewingItem.imageUris?.length
+          ? viewingItem.imageUris
+          : viewingItem.imageUri
+            ? [viewingItem.imageUri]
+            : []
+        : []
+    }
+    onClose={() => setViewingItem(null)}
+  />;
   return (
     <ScrollView
       showsVerticalScrollIndicator={false}
@@ -117,7 +127,8 @@ export default function WardrobeScreen({
           <Text className="mt-2 text-4xl font-extrabold text-white">
             {items.length}
             <Text className="text-base font-medium text-[#D4E0D2]">
-              {" "}barang
+              {" "}
+              barang
             </Text>
           </Text>
           <Text className="mt-2 text-sm leading-5 text-[#E0E7DD]">
@@ -130,9 +141,7 @@ export default function WardrobeScreen({
 
           <View className="flex-row items-center justify-between">
             <View>
-              <Text className="text-xs text-[#D4E0D2]">
-                Kategori tersedia
-              </Text>
+              <Text className="text-xs text-[#D4E0D2]">Kategori tersedia</Text>
               <Text className="mt-1 text-lg font-bold text-white">
                 {CLOTHING_CATEGORIES.length}
               </Text>
@@ -194,9 +203,7 @@ export default function WardrobeScreen({
           >
             <Text
               className={`text-xs font-bold ${
-                activeCategory === "all"
-                  ? "text-white"
-                  : "text-[#646B61]"
+                activeCategory === "all" ? "text-white" : "text-[#646B61]"
               }`}
             >
               Semua
@@ -264,10 +271,7 @@ export default function WardrobeScreen({
               </View>
             ) : (
               <View className="mt-5">
-                <ActionButton
-                  label="+ Tambah barang pertama"
-                  onPress={onAdd}
-                />
+                <ActionButton label="+ Tambah barang pertama" onPress={onAdd} />
               </View>
             )}
           </View>
@@ -277,27 +281,38 @@ export default function WardrobeScreen({
               const category = CLOTHING_CATEGORIES.find(
                 (entry) => entry.id === item.categoryId,
               );
+
               const subcategory = category?.subcategories.find(
                 (entry) => entry.id === item.subcategoryId,
               );
+
+              const fallbackEmoji =
+                SUBCATEGORY_EMOJIS[item.subcategoryId] ??
+                CATEGORY_EMOJIS[item.categoryId] ??
+                "📦";
 
               return (
                 <View
                   key={item.id}
                   className="mb-4 w-[48%] overflow-hidden rounded-2xl border border-[#E8E7E0] bg-white"
                 >
-                  <View className="aspect-square items-center justify-center bg-[#F0F1E9]">
-                    <Text className="text-6xl">
-                      {SUBCATEGORY_EMOJIS[item.subcategoryId] ??
-                        CATEGORY_EMOJIS[item.categoryId] ??
-                        "📦"}
-                    </Text>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Lihat foto ${item.name}`}
+                    onPress={() => setViewingItem(item)}
+                    className="aspect-square items-center justify-center overflow-hidden bg-[#F0F1E9]"
+                  >
+                    <ClothingPhoto
+                      imageUri={item.imageUri}
+                      fallbackEmoji={fallbackEmoji}
+                    />
+
                     <View className="absolute left-3 top-3 rounded-full bg-white/90 px-2.5 py-1">
                       <Text className="text-[10px] font-bold text-[#344C3D]">
                         {CATEGORY_LABELS[item.categoryId]}
                       </Text>
                     </View>
-                  </View>
+                  </Pressable>
 
                   <View className="p-3">
                     <Text
@@ -306,6 +321,7 @@ export default function WardrobeScreen({
                     >
                       {item.name}
                     </Text>
+
                     <Text
                       numberOfLines={1}
                       className="mt-1 text-xs text-[#858B83]"
@@ -332,6 +348,7 @@ export default function WardrobeScreen({
                           Edit
                         </Text>
                       </Pressable>
+
                       <Pressable
                         accessibilityRole="button"
                         onPress={() => onDelete(item)}

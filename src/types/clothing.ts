@@ -30,6 +30,7 @@ export type ClothingItem = {
   subcategoryId: string;
   color: string;
   imageUri: string | null;
+  imageUris?: string[];
   notes: string;
   createdAt: string;
   updatedAt: string;

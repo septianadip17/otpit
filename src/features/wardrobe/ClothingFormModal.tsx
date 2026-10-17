@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import {
   Modal,
@@ -10,13 +9,18 @@ import {
   TextInput,
   View,
 } from "react-native";
+import * as ImagePicker from "expo-image-picker";
+import * as ImageManipulator from "expo-image-manipulator";
 
 import { CLOTHING_CATEGORIES } from "../../constants/categories";
-import type {
-  ClothingCategoryId,
-  ClothingItem,
-} from "../../types/clothing";
+import type { ClothingCategoryId, ClothingItem } from "../../types/clothing";
 import ActionButton from "../../components/ActionButton";
+import ClothingPhoto from "../../components/ClothingPhoto";
+
+export type FormPhoto = {
+  uri: string;
+  isNew: boolean;
+};
 
 export type ClothingFormData = {
   name: string;
@@ -24,6 +28,8 @@ export type ClothingFormData = {
   subcategoryId: string;
   color: string;
   notes: string;
+  photos: FormPhoto[];
+  photosChanged: boolean;
 };
 
 export const INITIAL_FORM: ClothingFormData = {
@@ -32,13 +38,15 @@ export const INITIAL_FORM: ClothingFormData = {
   subcategoryId: "t-shirt",
   color: "",
   notes: "",
+  photos: [],
+  photosChanged: false,
 };
 
 type Props = {
   visible: boolean;
   item: ClothingItem | null;
   onClose: () => void;
-  onSave: (form: ClothingFormData, editingId: string | null) => void;
+  onSave: (form: ClothingFormData, editingId: string | null) => Promise<void>;
 };
 
 export default function ClothingFormModal({
@@ -49,11 +57,15 @@ export default function ClothingFormModal({
 }: Props) {
   const [form, setForm] = useState<ClothingFormData>(INITIAL_FORM);
   const [error, setError] = useState("");
+  const [isPickingImage, setIsPickingImage] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (!visible) return;
 
     setError("");
+    setIsSaving(false);
+
     setForm(
       item
         ? {
@@ -62,6 +74,16 @@ export default function ClothingFormModal({
             subcategoryId: item.subcategoryId,
             color: item.color,
             notes: item.notes,
+            photos: (item.imageUris?.length
+              ? item.imageUris
+              : item.imageUri
+                ? [item.imageUri]
+                : []
+            ).map((uri) => ({
+              uri,
+              isNew: false,
+            })),
+            photosChanged: false,
           }
         : INITIAL_FORM,
     );
@@ -92,7 +114,92 @@ export default function ClothingFormModal({
     }));
   }
 
-  function submit() {
+  async function pickImage() {
+    try {
+      setError("");
+
+      if (Platform.OS !== "web") {
+        const permission =
+          await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+        if (!permission.granted) {
+          setError("Izinkan akses galeri agar kamu bisa memilih foto pakaian.");
+          return;
+        }
+      }
+
+      setIsPickingImage(true);
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsMultipleSelection: false,
+        quality: 1,
+      });
+      if (form.photos.length >= 3) {
+        setError("Maksimal 3 foto untuk setiap barang.");
+        return;
+      }
+
+      const asset = result.assets?.[0];
+
+      if (!asset) return;
+      const longestSide = Math.max(asset.width, asset.height);
+      const actions =
+        longestSide > 1200
+          ? [
+              {
+                resize:
+                  asset.width >= asset.height
+                    ? { width: 1200 }
+                    : { height: 1200 },
+              },
+            ]
+          : [];
+
+      const compressed = await ImageManipulator.manipulateAsync(
+        asset.uri,
+        actions,
+        {
+          compress: 0.78,
+          format: ImageManipulator.SaveFormat.JPEG,
+        },
+      );
+
+      setForm((current) => {
+        if (current.photos.length >= 3) {
+          return current;
+        }
+
+        return {
+          ...current,
+          photos: [
+            ...current.photos,
+            {
+              uri: compressed.uri,
+              isNew: true,
+            },
+          ],
+          photosChanged: true,
+        };
+      });
+    } catch {
+      setError("Foto gagal diproses. Coba pilih gambar lain.");
+    } finally {
+      setIsPickingImage(false);
+    }
+  }
+
+  function removePhoto(index: number) {
+    setForm((current) => ({
+      ...current,
+      photos: current.photos.filter((_, i) => i !== index),
+      photosChanged: true,
+    }));
+  }
+
+  async function submit() {
+    if (isSaving || isPickingImage) return;
+
     if (!form.name.trim()) {
       setError("Nama barang wajib diisi.");
       return;
@@ -111,15 +218,28 @@ export default function ClothingFormModal({
       return;
     }
 
-    onSave(
-      {
-        ...form,
-        name: form.name.trim(),
-        color: form.color.trim(),
-        notes: form.notes.trim(),
-      },
-      item?.id ?? null,
-    );
+    setError("");
+    setIsSaving(true);
+
+    try {
+      await onSave(
+        {
+          ...form,
+          name: form.name.trim(),
+          color: form.color.trim(),
+          notes: form.notes.trim(),
+        },
+        item?.id ?? null,
+      );
+    } catch (saveError) {
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : "Barang gagal disimpan. Coba lagi.",
+      );
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   return (
@@ -154,6 +274,7 @@ export default function ClothingFormModal({
               accessibilityRole="button"
               accessibilityLabel="Tutup form"
               onPress={onClose}
+              disabled={isSaving}
               className="h-10 w-10 items-center justify-center rounded-full border border-[#E8E7E0] bg-white"
             >
               <Text className="text-xl text-[#344C3D]">×</Text>
@@ -161,93 +282,79 @@ export default function ClothingFormModal({
           </View>
 
           <View className="mb-5 rounded-2xl border border-[#E8E7E0] bg-white p-4">
-            <Text className="mb-2 text-sm font-bold text-[#26352C]">
-              Nama barang *
-            </Text>
-            <TextInput
-              className="rounded-xl border border-[#E8E7E0] bg-[#FCFBF8] px-4 py-3.5 text-sm text-[#26352C]"
-              placeholder="Contoh: Kemeja linen putih"
-              placeholderTextColor="#92948D"
-              value={form.name}
-              onChangeText={(value) => update("name", value)}
-              maxLength={80}
-              returnKeyType="next"
-            />
+            <View className="mb-3 flex-row items-center justify-between">
+              <Text className="text-sm font-bold text-[#26352C]">
+                Foto pakaian
+              </Text>
+              <Text className="text-xs text-[#858B83]">
+                {form.photos.length}/3 foto
+              </Text>
+            </View>
 
-            <Text className="mb-2 mt-5 text-sm font-bold text-[#26352C]">
-              Kategori *
-            </Text>
-            <View className="flex-row flex-wrap gap-2">
-              {CLOTHING_CATEGORIES.map((category) => (
-                <Pressable
-                  key={category.id}
-                  onPress={() => changeCategory(category.id)}
-                  className={`rounded-full border px-3 py-2 ${
-                    form.categoryId === category.id
-                      ? "border-[#344C3D] bg-[#344C3D]"
-                      : "border-[#E8E7E0] bg-white"
-                  }`}
-                >
-                  <Text
-                    className={`text-xs font-semibold ${
-                      form.categoryId === category.id
-                        ? "text-white"
-                        : "text-[#646B61]"
-                    }`}
+            <View className="h-56 overflow-hidden rounded-2xl bg-[#F0F1E9]">
+              <ClothingPhoto
+                imageUri={form.photos[0]?.uri ?? null}
+                fallbackEmoji="📷"
+              />
+            </View>
+
+            {form.photos.length > 0 ? (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: 10, paddingVertical: 12 }}
+              >
+                {form.photos.map((photo, index) => (
+                  <View
+                    key={`${photo.uri}-${index}`}
+                    className="h-20 w-20 overflow-hidden rounded-xl border border-[#DCE6D8]"
                   >
-                    {category.name}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
+                    <ClothingPhoto imageUri={photo.uri} resizeMode="cover" />
 
-            <Text className="mb-2 mt-5 text-sm font-bold text-[#26352C]">
-              Subkategori *
-            </Text>
-            <View className="flex-row flex-wrap gap-2">
-              {subcategories.map((subcategory) => (
-                <Pressable
-                  key={subcategory.id}
-                  onPress={() => update("subcategoryId", subcategory.id)}
-                  className={`rounded-full border px-3 py-2 ${
-                    form.subcategoryId === subcategory.id
-                      ? "border-[#B6C8B1] bg-[#DCE6D8]"
-                      : "border-[#E8E7E0] bg-white"
-                  }`}
-                >
-                  <Text className="text-xs font-semibold text-[#344C3D]">
-                    {subcategory.name}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Hapus foto ${index + 1}`}
+                      disabled={isSaving || isPickingImage}
+                      onPress={() => removePhoto(index)}
+                      className="absolute right-1 top-1 h-6 w-6 items-center justify-center rounded-full bg-[#26352C]/90"
+                    >
+                      <Text className="font-bold text-white">×</Text>
+                    </Pressable>
 
-            <Text className="mb-2 mt-5 text-sm font-bold text-[#26352C]">
-              Warna
-            </Text>
-            <TextInput
-              className="rounded-xl border border-[#E8E7E0] bg-[#FCFBF8] px-4 py-3.5 text-sm text-[#26352C]"
-              placeholder="Contoh: Putih, navy, hitam"
-              placeholderTextColor="#92948D"
-              value={form.color}
-              onChangeText={(value) => update("color", value)}
-              maxLength={40}
-              returnKeyType="next"
-            />
+                    {index === 0 ? (
+                      <View className="absolute bottom-0 left-0 right-0 bg-[#344C3D]/90 py-1">
+                        <Text className="text-center text-[9px] font-bold text-white">
+                          UTAMA
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                ))}
+              </ScrollView>
+            ) : null}
 
-            <Text className="mb-2 mt-5 text-sm font-bold text-[#26352C]">
-              Catatan
+            {form.photos.length < 3 ? (
+              <ActionButton
+                label={
+                  isPickingImage
+                    ? "Memproses foto..."
+                    : form.photos.length === 0
+                      ? "Pilih foto dari galeri"
+                      : " + Tambah foto"
+                }
+                onPress={() => void pickImage()}
+                secondary
+              />
+            ) : (
+              <Text className="py-3 text-center text-xs text-[#858B83]">
+                Batas 3 foto sudah tercapai.
+              </Text>
+            )}
+
+            <Text className="mt-2 text-xs leading-5 text-[#858B83]">
+              Foto pertama menjadi foto utama. Foto akan diperkecil otomatis
+              untuk menghemat ruang penyimpanan.
             </Text>
-            <TextInput
-              multiline
-              textAlignVertical="top"
-              className="min-h-24 rounded-xl border border-[#E8E7E0] bg-[#FCFBF8] px-4 py-3.5 text-sm text-[#26352C]"
-              placeholder="Misalnya: cocok untuk acara formal"
-              placeholderTextColor="#92948D"
-              value={form.notes}
-              onChangeText={(value) => update("notes", value)}
-              maxLength={500}
-            />
           </View>
 
           {error ? (
@@ -257,16 +364,18 @@ export default function ClothingFormModal({
           ) : null}
 
           <ActionButton
-            label={item ? "Simpan perubahan" : "Simpan ke lemari"}
-            onPress={submit}
+            label={
+              isSaving
+                ? "Menyimpan..."
+                : item
+                  ? "Simpan perubahan"
+                  : "Simpan ke lemari"
+            }
+            onPress={() => void submit()}
           />
 
           <View className="mt-3">
-            <ActionButton
-              label="Batal"
-              secondary
-              onPress={onClose}
-            />
+            <ActionButton label="Batal" secondary onPress={onClose} />
           </View>
         </ScrollView>
       </View>
