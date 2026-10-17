@@ -1,288 +1,246 @@
-import { useState } from "react";
-import {
-  SafeAreaView,
-  View,
-  Text,
-  TextInput,
-  ScrollView,
-  Pressable,
-  StyleSheet,
-  StatusBar,
-} from "react-native";
 
-const categories = ["Semua", "Baju", "Celana", "Sepatu", "Hijab", "Aksesori"];
+import { useEffect, useState } from "react";
+import {
+  Alert,
+  Pressable,
+  StatusBar,
+  Text,
+  View,
+  useWindowDimensions,
+} from "react-native";
+import "./global.css";
+
+import { CLOTHING_CATEGORIES } from "./src/constants/categories";
+import {
+  loadClothingItems,
+  saveClothingItems,
+} from "./src/services/clothingStorage";
+import type { ClothingItem } from "./src/types/clothing";
+
+import ActionButton from "./src/components/ActionButton";
+import BottomNav, {
+  type TabName,
+} from "./src/components/BottomNav";
+import ClothingFormModal, {
+  type ClothingFormData,
+} from "./src/features/wardrobe/ClothingFormModal";
+import WardrobeScreen from "./src/features/wardrobe/WardrobeScreen";
+import ProfileModal from "./src/features/profile/ProfileModal";
+import StatisticsModal from "./src/features/statistics/StatisticsModal";
 
 export default function App() {
-  const [activeCategory, setActiveCategory] = useState("Semua");
-  const [search, setSearch] = useState("");
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= 768;
+
+  const [items, setItems] = useState<ClothingItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isFormVisible, setIsFormVisible] = useState(false);
+  const [editingItem, setEditingItem] = useState<ClothingItem | null>(null);
+  const [deleteItem, setDeleteItem] = useState<ClothingItem | null>(null);
+  const [isProfileVisible, setIsProfileVisible] = useState(false);
+  const [isStatsVisible, setIsStatsVisible] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabName>("wardrobe");
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function load() {
+      try {
+        const savedItems = await loadClothingItems();
+        if (mounted) setItems(savedItems);
+      } catch {
+        if (mounted) {
+          Alert.alert(
+            "Koleksi belum bisa dimuat",
+            "Penyimpanan lokal tidak dapat dibaca. Coba buka ulang aplikasi.",
+          );
+        }
+      } finally {
+        if (mounted) setIsLoading(false);
+      }
+    }
+
+    void load();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isLoading) return;
+
+    void saveClothingItems(items).catch(() => {
+      Alert.alert(
+        "Gagal menyimpan",
+        "Perubahan belum berhasil disimpan ke perangkat.",
+      );
+    });
+  }, [items, isLoading]);
+
+  function openAddForm() {
+    setEditingItem(null);
+    setIsFormVisible(true);
+  }
+
+  function openEditForm(item: ClothingItem) {
+    setEditingItem(item);
+    setIsFormVisible(true);
+  }
+
+  function handleSave(
+    form: ClothingFormData,
+    editingId: string | null,
+  ) {
+    const now = new Date().toISOString();
+
+    if (editingId) {
+      setItems((current) =>
+        current.map((item) =>
+          item.id === editingId
+            ? {
+                ...item,
+                name: form.name,
+                categoryId: form.categoryId,
+                subcategoryId: form.subcategoryId,
+                color: form.color,
+                notes: form.notes,
+                updatedAt: now,
+              }
+            : item,
+        ),
+      );
+    } else {
+      const newItem: ClothingItem = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+        name: form.name,
+        categoryId: form.categoryId,
+        subcategoryId: form.subcategoryId,
+        color: form.color,
+        imageUri: null,
+        notes: form.notes,
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      setItems((current) => [newItem, ...current]);
+    }
+
+    setIsFormVisible(false);
+    setEditingItem(null);
+  }
+
+  function confirmDelete() {
+    if (!deleteItem) return;
+
+    setItems((current) =>
+      current.filter((item) => item.id !== deleteItem.id),
+    );
+    setDeleteItem(null);
+  }
+
+  function navigate(tab: TabName) {
+    setActiveTab(tab);
+
+    if (tab === "statistics") {
+      setIsStatsVisible(true);
+    }
+  }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F8F7F2" />
+    <View className="flex-1 bg-[#F8F7F2]">
+      <StatusBar
+        barStyle="dark-content"
+        backgroundColor="#F8F7F2"
+      />
 
-      <ScrollView showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.logo}>otpit.</Text>
-            <Text style={styles.subtitle}>Lemari digital kamu</Text>
-          </View>
-
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>O</Text>
-          </View>
-        </View>
-
-        <View style={styles.greeting}>
-          <Text style={styles.greetingTitle}>Isi lemari, kenali gayamu.</Text>
-          <Text style={styles.greetingSubtitle}>
-            Semua koleksi favoritmu dalam satu tempat.
-          </Text>
-        </View>
-
-        <View style={styles.statsCard}>
-          <Text style={styles.statsLabel}>KOLEKSI SAYA</Text>
-          <Text style={styles.statsNumber}>0 barang</Text>
-          <Text style={styles.statsDescription}>
-            Yuk, mulai catat isi lemarimu!
-          </Text>
-        </View>
-
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Lemari saya</Text>
-          <Text style={styles.itemCount}>0 item</Text>
-        </View>
-
-        <TextInput
-          style={styles.search}
-          placeholder="Cari baju, sepatu, hijab..."
-          placeholderTextColor="#92948D"
-          value={search}
-          onChangeText={setSearch}
+      <View className="flex-1">
+        <WardrobeScreen
+          items={items}
+          isLoading={isLoading}
+          onAdd={openAddForm}
+          onEdit={openEditForm}
+          onDelete={setDeleteItem}
         />
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.categoryList}
-        >
-          {categories.map((category) => (
-            <Pressable
-              key={category}
-              onPress={() => setActiveCategory(category)}
-              style={[
-                styles.categoryButton,
-                activeCategory === category && styles.categoryButtonActive,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.categoryText,
-                  activeCategory === category && styles.categoryTextActive,
-                ]}
-              >
-                {category}
-              </Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyEmoji}>👕</Text>
-          <Text style={styles.emptyTitle}>Lemarimu masih kosong</Text>
-          <Text style={styles.emptyDescription}>
-            Tambahkan pakaian pertamamu dan mulai bangun koleksi digitalmu.
-          </Text>
-
+        <View className="absolute right-5 top-5 z-10">
           <Pressable
-            style={styles.addButton}
-            onPress={() =>
-              alert("Fitur tambah barang akan kita buat berikutnya!")
-            }
+            accessibilityRole="button"
+            accessibilityLabel="Buka profil dan pengaturan"
+            onPress={() => setIsProfileVisible(true)}
+            className="h-11 w-11 items-center justify-center rounded-full border border-[#DCE6D8] bg-[#DCE6D8]"
           >
-            <Text style={styles.addButtonText}>+ Tambah barang pertama</Text>
+            <Text className="text-lg font-bold text-[#344C3D]">O</Text>
           </Pressable>
         </View>
+      </View>
 
-        <Text style={styles.footer}>Otpit · Semua koleksi, satu lemari.</Text>
-      </ScrollView>
-    </SafeAreaView>
+      {!isDesktop && (
+        <BottomNav
+          activeTab={activeTab}
+          onNavigate={navigate}
+          onAdd={openAddForm}
+        />
+      )}
+
+      <ClothingFormModal
+        visible={isFormVisible}
+        item={editingItem}
+        onClose={() => {
+          setIsFormVisible(false);
+          setEditingItem(null);
+        }}
+        onSave={handleSave}
+      />
+
+      <ProfileModal
+        visible={isProfileVisible}
+        itemCount={items.length}
+        onClose={() => setIsProfileVisible(false)}
+      />
+
+      <StatisticsModal
+        visible={isStatsVisible}
+        items={items}
+        onClose={() => {
+          setIsStatsVisible(false);
+          setActiveTab("wardrobe");
+        }}
+      />
+
+      {/* Konfirmasi hapus barang */}
+      {deleteItem && (
+        <View className="absolute inset-0 z-20 items-center justify-center bg-black/30 px-6">
+          <View className="w-full max-w-sm rounded-3xl bg-[#F8F7F2] p-6">
+            <Text className="text-xl font-extrabold text-[#26352C]">
+              Hapus barang?
+            </Text>
+            <Text className="mt-3 text-sm leading-6 text-[#858B83]">
+              "{deleteItem.name}" akan dihapus dari koleksi perangkat ini.
+            </Text>
+            <View className="mt-6 flex-row gap-3">
+              <View className="flex-1">
+                <ActionButton
+                  label="Batal"
+                  secondary
+                  onPress={() => setDeleteItem(null)}
+                />
+              </View>
+              <View className="flex-1">
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={confirmDelete}
+                  className="items-center justify-center rounded-xl bg-[#9A5146] px-4 py-3"
+                >
+                  <Text className="text-sm font-bold text-white">
+                    Hapus
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </View>
+      )}
+    </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#F8F7F2",
-  },
-  header: {
-    paddingHorizontal: 24,
-    paddingTop: 18,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  logo: {
-    fontSize: 32,
-    fontWeight: "800",
-    color: "#344C3D",
-    letterSpacing: -1.5,
-  },
-  subtitle: {
-    fontSize: 13,
-    color: "#777C72",
-    marginTop: 2,
-  },
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "#E1E8DA",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  avatarText: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#344C3D",
-  },
-  greeting: {
-    paddingHorizontal: 24,
-    marginTop: 30,
-    marginBottom: 22,
-  },
-  greetingTitle: {
-    fontSize: 25,
-    fontWeight: "800",
-    color: "#29372E",
-    letterSpacing: -0.7,
-  },
-  greetingSubtitle: {
-    fontSize: 14,
-    color: "#777C72",
-    marginTop: 8,
-    lineHeight: 21,
-  },
-  statsCard: {
-    marginHorizontal: 24,
-    padding: 22,
-    borderRadius: 20,
-    backgroundColor: "#344C3D",
-  },
-  statsLabel: {
-    color: "#D4E0D2",
-    fontSize: 11,
-    fontWeight: "700",
-    letterSpacing: 1.5,
-  },
-  statsNumber: {
-    fontSize: 30,
-    color: "#FFFFFF",
-    fontWeight: "800",
-    marginTop: 10,
-  },
-  statsDescription: {
-    color: "#E0E7DD",
-    fontSize: 13,
-    marginTop: 6,
-  },
-  sectionHeader: {
-    marginHorizontal: 24,
-    marginTop: 30,
-    marginBottom: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#29372E",
-  },
-  itemCount: {
-    fontSize: 13,
-    color: "#777C72",
-  },
-  search: {
-    marginHorizontal: 24,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#E8E7E0",
-    borderRadius: 13,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 14,
-    color: "#29372E",
-  },
-  categoryList: {
-    paddingHorizontal: 24,
-    paddingVertical: 18,
-    gap: 9,
-  },
-  categoryButton: {
-    borderWidth: 1,
-    borderColor: "#E3E4DB",
-    borderRadius: 30,
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    backgroundColor: "#FFFFFF",
-  },
-  categoryButtonActive: {
-    backgroundColor: "#344C3D",
-    borderColor: "#344C3D",
-  },
-  categoryText: {
-    color: "#646B61",
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  categoryTextActive: {
-    color: "#FFFFFF",
-  },
-  emptyState: {
-    marginHorizontal: 24,
-    marginTop: 8,
-    paddingHorizontal: 24,
-    paddingVertical: 30,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#EAE9E2",
-  },
-  emptyEmoji: {
-    fontSize: 48,
-    marginBottom: 12,
-  },
-  emptyTitle: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: "#29372E",
-    textAlign: "center",
-  },
-  emptyDescription: {
-    marginTop: 9,
-    fontSize: 13,
-    color: "#777C72",
-    lineHeight: 20,
-    textAlign: "center",
-  },
-  addButton: {
-    marginTop: 20,
-    backgroundColor: "#344C3D",
-    borderRadius: 12,
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-  },
-  addButtonText: {
-    color: "#FFFFFF",
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  footer: {
-    textAlign: "center",
-    color: "#92948D",
-    fontSize: 12,
-    marginTop: 28,
-    marginBottom: 30,
-  },
-});
