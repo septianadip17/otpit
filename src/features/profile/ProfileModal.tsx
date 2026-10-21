@@ -1,16 +1,16 @@
-
 import { Modal, Pressable, Text, View } from "react-native";
-
 type Props = {
   visible: boolean;
   itemCount: number;
   onClose: () => void;
+  onManageCategories: () => void;
 };
 
 export default function ProfileModal({
   visible,
   itemCount,
   onClose,
+  onManageCategories,
 }: Props) {
   return (
     <Modal
@@ -47,16 +47,36 @@ export default function ProfileModal({
           </View>
 
           <View className="rounded-2xl border border-[#E8E7E0] bg-white p-4">
+            <Pressable
+              accessibilityRole="button"
+              onPress={onManageCategories}
+              className="mb-3 flex-row items-center rounded-2xl border border-[#E8E7E0] bg-white p-4"
+            >
+              <View className="mr-3 h-11 w-11 items-center justify-center rounded-xl bg-[#DCE6D8]">
+                <Text className="text-xl">🏷️</Text>
+              </View>
+
+              <View className="flex-1">
+                <Text className="font-bold text-[#26352C]">
+                  Kelola kategori
+                </Text>
+                <Text className="mt-1 text-sm leading-5 text-[#858B83]">
+                  Tambah, ubah, dan atur kategori serta subkategori pakaian.
+                </Text>
+              </View>
+
+              <Text className="text-lg text-[#858B83]">›</Text>
+            </Pressable>
             <Text className="font-bold text-[#26352C]">Ekspor data</Text>
             <Text className="mt-1 text-sm leading-5 text-[#858B83]">
-              Ekspor CSV yang bisa dibuka di Excel akan kita tambahkan
-              setelah fitur inti MVP stabil.
+              Ekspor CSV yang bisa dibuka di Excel akan kita tambahkan setelah
+              fitur inti MVP stabil.
             </Text>
           </View>
 
           <Text className="mt-4 text-center text-xs leading-5 text-[#858B83]">
-            Otpit menyimpan koleksi secara lokal. Akun dan sinkronisasi
-            cloud belum diperlukan untuk MVP.
+            Otpit menyimpan koleksi secara lokal. Akun dan sinkronisasi cloud
+            belum diperlukan untuk MVP.
           </Text>
         </View>
       </View>

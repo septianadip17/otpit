@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import CategoryManagementScreen from "./src/features/categories/CategoryManagementScreen";
+import { loadCategories, saveCategories } from "./src/services/categoryStorage";
 import {
   Alert,
   Pressable,
@@ -6,6 +8,7 @@ import {
   Text,
   View,
   useWindowDimensions,
+  Platform,
 } from "react-native";
 import "./global.css";
 
@@ -18,7 +21,11 @@ import {
   saveClothingImage,
   deleteClothingImage,
 } from "./src/services/clothingImageStorage";
-import type { ClothingItem } from "./src/types/clothing";
+import type {
+  ClothingCategory,
+  ClothingItem,
+  ClothingSubcategory,
+} from "./src/types/clothing";
 
 import ActionButton from "./src/components/ActionButton";
 import BottomNav, { type TabName } from "./src/components/BottomNav";
@@ -38,6 +45,7 @@ export default function App() {
   const isDesktop = width >= 768;
 
   const [items, setItems] = useState<ClothingItem[]>([]);
+  const [categories, setCategories] = useState<ClothingCategory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isFormVisible, setIsFormVisible] = useState(false);
   const [editingItem, setEditingItem] = useState<ClothingItem | null>(null);
@@ -45,26 +53,35 @@ export default function App() {
   const [isProfileVisible, setIsProfileVisible] = useState(false);
   const [isStatsVisible, setIsStatsVisible] = useState(false);
   const [activeTab, setActiveTab] = useState<TabName>("wardrobe");
+  const [isCategoriesVisible, setIsCategoriesVisible] = useState(false);
+  const [hasLoadedCategories, setHasLoadedCategories] = useState(false);
 
   useEffect(() => {
     let mounted = true;
 
     async function load() {
       try {
-        const savedItems = await loadClothingItems();
+        const [savedItems, savedCategories] = await Promise.all([
+          loadClothingItems(),
+          loadCategories(),
+        ]);
 
         if (mounted) {
           setItems(savedItems);
+          setCategories(savedCategories);
+          setHasLoadedCategories(true);
         }
       } catch {
         if (mounted) {
           Alert.alert(
-            "Koleksi belum bisa dimuat",
+            "Data belum bisa dimuat",
             "Penyimpanan lokal tidak dapat dibaca. Coba buka ulang aplikasi.",
           );
         }
       } finally {
-        if (mounted) setIsLoading(false);
+        if (mounted) {
+          setIsLoading(false);
+        }
       }
     }
 
@@ -76,15 +93,15 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (isLoading) return;
+    if (!hasLoadedCategories) return;
 
-    void saveClothingItems(items).catch(() => {
+    void saveCategories(categories).catch(() => {
       Alert.alert(
-        "Gagal menyimpan",
-        "Perubahan belum berhasil disimpan ke perangkat.",
+        "Gagal menyimpan kategori",
+        "Perubahan kategori belum berhasil disimpan ke perangkat.",
       );
     });
-  }, [items, isLoading]);
+  }, [categories, hasLoadedCategories]);
 
   function openAddForm() {
     setEditingItem(null);
@@ -249,6 +266,125 @@ export default function App() {
     }
   }
 
+  function handleAddCategory(name: string) {
+    const category: ClothingCategory = {
+      id: createId(),
+      name,
+      isDefault: false,
+      subcategories: [],
+    };
+
+    setCategories((current) => [...current, category]);
+  }
+
+  function handleRenameCategory(id: string, name: string) {
+    setCategories((current) =>
+      current.map((category) =>
+        category.id === id ? { ...category, name } : category,
+      ),
+    );
+  }
+
+  function handleDeleteCategory(categoryId: string) {
+    const category = categories.find((item) => item.id === categoryId);
+
+    if (!category) {
+      Alert.alert("Gagal", "Kategori tidak ditemukan.");
+      return;
+    }
+
+    const hasItems = items.some((item) => item.categoryId === categoryId);
+    if (hasItems) {
+      const message =
+        `Kategori "${category.name}" masih digunakan oleh pakaian. ` +
+        "Pindahkan atau hapus semua pakaian dalam kategori ini terlebih dahulu.";
+
+      if (Platform.OS === "web") {
+        window.alert(message);
+      } else {
+        Alert.alert("Kategori masih digunakan", message);
+      }
+
+      return;
+    }
+
+    setCategories((current) =>
+      current.filter((item) => item.id !== categoryId),
+    );
+
+    Alert.alert(
+      "Kategori berhasil dihapus",
+      `Kategori "${category.name}" sudah dihapus.`,
+    );
+  }
+
+  function handleAddSubcategory(categoryId: string, name: string) {
+    const subcategory: ClothingSubcategory = {
+      id: createId(),
+      name,
+    };
+
+    setCategories((current) =>
+      current.map((category) =>
+        category.id === categoryId
+          ? {
+              ...category,
+              subcategories: [...category.subcategories, subcategory],
+            }
+          : category,
+      ),
+    );
+  }
+
+  function handleRenameSubcategory(
+    categoryId: string,
+    subcategoryId: string,
+    name: string,
+  ) {
+    setCategories((current) =>
+      current.map((category) =>
+        category.id === categoryId
+          ? {
+              ...category,
+              subcategories: category.subcategories.map((subcategory) =>
+                subcategory.id === subcategoryId
+                  ? { ...subcategory, name }
+                  : subcategory,
+              ),
+            }
+          : category,
+      ),
+    );
+  }
+
+  function handleDeleteSubcategory(categoryId: string, subcategoryId: string) {
+    const isUsed = items.some(
+      (item) =>
+        item.categoryId === categoryId && item.subcategoryId === subcategoryId,
+    );
+
+    if (isUsed) {
+      Alert.alert(
+        "Subkategori masih digunakan",
+        "Pindahkan pakaian ke subkategori lain atau hapus pakaian tersebut terlebih dahulu.",
+      );
+      return;
+    }
+
+    setCategories((current) =>
+      current.map((category) =>
+        category.id === categoryId
+          ? {
+              ...category,
+              subcategories: category.subcategories.filter(
+                (subcategory) => subcategory.id !== subcategoryId,
+              ),
+            }
+          : category,
+      ),
+    );
+  }
+
   return (
     <View className="flex-1 bg-[#F8F7F2]">
       <StatusBar barStyle="dark-content" backgroundColor="#F8F7F2" />
@@ -256,6 +392,7 @@ export default function App() {
       <View className="flex-1">
         <WardrobeScreen
           items={items}
+          categories={categories}
           isLoading={isLoading}
           onAdd={openAddForm}
           onEdit={openEditForm}
@@ -285,6 +422,7 @@ export default function App() {
       <ClothingFormModal
         visible={isFormVisible}
         item={editingItem}
+        categories={categories}
         onClose={() => {
           setIsFormVisible(false);
           setEditingItem(null);
@@ -296,6 +434,22 @@ export default function App() {
         visible={isProfileVisible}
         itemCount={items.length}
         onClose={() => setIsProfileVisible(false)}
+        onManageCategories={() => {
+          setIsProfileVisible(false);
+          setIsCategoriesVisible(true);
+        }}
+      />
+
+      <CategoryManagementScreen
+        visible={isCategoriesVisible}
+        categories={categories}
+        onClose={() => setIsCategoriesVisible(false)}
+        onAddCategory={handleAddCategory}
+        onRenameCategory={handleRenameCategory}
+        onAddSubcategory={handleAddSubcategory}
+        onRenameSubcategory={handleRenameSubcategory}
+        onDeleteSubcategory={handleDeleteSubcategory}
+        onDeleteCategory={handleDeleteCategory}
       />
 
       <StatisticsModal

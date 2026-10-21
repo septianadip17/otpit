@@ -5,6 +5,7 @@ export const CLOTHING_CATEGORIES: ClothingCategory[] = [
   {
     id: "tops",
     name: "Atasan",
+    isDefault: true,
     subcategories: [
       { id: "t-shirt", name: "Kaos" },
       { id: "shirt", name: "Kemeja" },
@@ -22,6 +23,7 @@ export const CLOTHING_CATEGORIES: ClothingCategory[] = [
   {
     id: "bottoms",
     name: "Bawahan",
+    isDefault: true,
     subcategories: [
       { id: "long-pants", name: "Celana panjang" },
       { id: "shorts", name: "Celana pendek" },
@@ -34,6 +36,7 @@ export const CLOTHING_CATEGORIES: ClothingCategory[] = [
   {
     id: "one-piece",
     name: "Pakaian terusan",
+    isDefault: true,
     subcategories: [
       { id: "dress", name: "Dress" },
       { id: "gamis", name: "Gamis" },
@@ -44,6 +47,7 @@ export const CLOTHING_CATEGORIES: ClothingCategory[] = [
   {
     id: "religious-wear",
     name: "Pakaian ibadah",
+    isDefault: true,
     subcategories: [
       { id: "baju-koko", name: "Baju koko" },
       { id: "mukena", name: "Mukena" },
@@ -54,6 +58,7 @@ export const CLOTHING_CATEGORIES: ClothingCategory[] = [
   {
     id: "underwear-homewear",
     name: "Pakaian dalam & rumah",
+    isDefault: true,
     subcategories: [
       { id: "undershirt", name: "Kaos dalam" },
       { id: "underwear", name: "Celana dalam" },
@@ -66,6 +71,7 @@ export const CLOTHING_CATEGORIES: ClothingCategory[] = [
   {
     id: "headwear",
     name: "Hijab & penutup kepala",
+    isDefault: true,
     subcategories: [
       { id: "hijab-square", name: "Hijab segi empat" },
       { id: "pashmina", name: "Pashmina" },
@@ -79,6 +85,7 @@ export const CLOTHING_CATEGORIES: ClothingCategory[] = [
   {
     id: "footwear",
     name: "Alas kaki",
+    isDefault: true,
     subcategories: [
       { id: "sneakers", name: "Sneakers" },
       { id: "formal-shoes", name: "Sepatu formal" },
@@ -92,6 +99,7 @@ export const CLOTHING_CATEGORIES: ClothingCategory[] = [
   {
     id: "socks",
     name: "Kaos kaki",
+    isDefault: true,
     subcategories: [
       { id: "short-socks", name: "Kaos kaki pendek" },
       { id: "long-socks", name: "Kaos kaki panjang" },
@@ -102,6 +110,7 @@ export const CLOTHING_CATEGORIES: ClothingCategory[] = [
   {
     id: "bags",
     name: "Tas & dompet",
+    isDefault: true,
     subcategories: [
       { id: "backpack", name: "Ransel" },
       { id: "sling-bag", name: "Tas selempang" },
@@ -114,6 +123,7 @@ export const CLOTHING_CATEGORIES: ClothingCategory[] = [
   {
     id: "accessories",
     name: "Aksesori",
+    isDefault: true,
     subcategories: [
       { id: "belt", name: "Ikat pinggang" },
       { id: "watch", name: "Jam tangan" },
@@ -130,6 +140,7 @@ export const CLOTHING_CATEGORIES: ClothingCategory[] = [
   {
     id: "other",
     name: "Lainnya",
+    isDefault: true,
     subcategories: [
       { id: "miscellaneous", name: "Barang lainnya" },
     ],

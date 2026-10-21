@@ -1,4 +1,9 @@
 import { useEffect, useState } from "react";
+import type {
+  ClothingCategory,
+  ClothingCategoryId,
+  ClothingItem,
+} from "../../types/clothing";
 import {
   Modal,
   Platform,
@@ -12,8 +17,6 @@ import {
 import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
 
-import { CLOTHING_CATEGORIES } from "../../constants/categories";
-import type { ClothingCategoryId, ClothingItem } from "../../types/clothing";
 import ActionButton from "../../components/ActionButton";
 import ClothingPhoto from "../../components/ClothingPhoto";
 
@@ -45,13 +48,18 @@ export const INITIAL_FORM: ClothingFormData = {
 type Props = {
   visible: boolean;
   item: ClothingItem | null;
+  categories: ClothingCategory[];
   onClose: () => void;
-  onSave: (form: ClothingFormData, editingId: string | null) => Promise<void>;
+  onSave: (
+    form: ClothingFormData,
+    editingId: string | null,
+  ) => Promise<void>;
 };
 
 export default function ClothingFormModal({
   visible,
   item,
+  categories,
   onClose,
   onSave,
 }: Props) {
@@ -69,27 +77,27 @@ export default function ClothingFormModal({
     setForm(
       item
         ? {
-            name: item.name,
-            categoryId: item.categoryId,
-            subcategoryId: item.subcategoryId,
-            color: item.color,
-            notes: item.notes,
-            photos: (item.imageUris?.length
-              ? item.imageUris
-              : item.imageUri
-                ? [item.imageUri]
-                : []
-            ).map((uri) => ({
-              uri,
-              isNew: false,
-            })),
-            photosChanged: false,
-          }
+          name: item.name,
+          categoryId: item.categoryId,
+          subcategoryId: item.subcategoryId,
+          color: item.color,
+          notes: item.notes,
+          photos: (item.imageUris?.length
+            ? item.imageUris
+            : item.imageUri
+              ? [item.imageUri]
+              : []
+          ).map((uri) => ({
+            uri,
+            isNew: false,
+          })),
+          photosChanged: false,
+        }
         : INITIAL_FORM,
     );
   }, [visible, item]);
 
-  const selectedCategory = CLOTHING_CATEGORIES.find(
+  const selectedCategory = categories.find(
     (category) => category.id === form.categoryId,
   );
 
@@ -103,8 +111,8 @@ export default function ClothingFormModal({
   }
 
   function changeCategory(categoryId: ClothingCategoryId) {
-    const category = CLOTHING_CATEGORIES.find(
-      (entry) => entry.id === categoryId,
+    const category = categories.find(
+      (entry) => entry.id === form.categoryId,
     );
 
     setForm((current) => ({
@@ -147,13 +155,13 @@ export default function ClothingFormModal({
       const actions =
         longestSide > 1200
           ? [
-              {
-                resize:
-                  asset.width >= asset.height
-                    ? { width: 1200 }
-                    : { height: 1200 },
-              },
-            ]
+            {
+              resize:
+                asset.width >= asset.height
+                  ? { width: 1200 }
+                  : { height: 1200 },
+            },
+          ]
           : [];
 
       const compressed = await ImageManipulator.manipulateAsync(
@@ -205,7 +213,7 @@ export default function ClothingFormModal({
       return;
     }
 
-    const category = CLOTHING_CATEGORIES.find(
+    const category = categories.find(
       (entry) => entry.id === form.categoryId,
     );
 
@@ -355,6 +363,116 @@ export default function ClothingFormModal({
               Foto pertama menjadi foto utama. Foto akan diperkecil otomatis
               untuk menghemat ruang penyimpanan.
             </Text>
+          </View>
+
+          {/* Informasi barang */}
+          <View className="mb-5 rounded-2xl border border-[#E8E7E0] bg-white p-4">
+            <Text className="mb-3 text-sm font-bold text-[#26352C]">
+              Informasi barang
+            </Text>
+
+            {/* Nama */}
+            <Text className="mb-2 text-xs font-semibold text-[#858B83]">
+              Nama barang *
+            </Text>
+            <TextInput
+              value={form.name}
+              onChangeText={(value) => update("name", value)}
+              placeholder="Contoh: Kaos putih polos"
+              placeholderTextColor="#A5AAA2"
+              editable={!isSaving}
+              maxLength={100}
+              className="mb-5 rounded-xl border border-[#E8E7E0] bg-[#F8F7F2] px-4 py-3 text-sm text-[#26352C]"
+            />
+
+            {/* Kategori */}
+            <Text className="mb-3 text-xs font-semibold text-[#858B83]">
+              Kategori *
+            </Text>
+            <View className="mb-5 flex-row flex-wrap gap-2">
+              {categories.map((category) => {
+                const isSelected = form.categoryId === category.id;
+
+                return (
+                  <Pressable
+                    key={category.id}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isSelected }}
+                    disabled={isSaving}
+                    onPress={() => changeCategory(category.id)}
+                    className={`rounded-full border px-4 py-2 ${isSelected
+                        ? "border-[#344C3D] bg-[#344C3D]"
+                        : "border-[#DCE6D8] bg-white"
+                      }`}
+                  >
+                    <Text
+                      className={`text-xs font-semibold ${isSelected ? "text-white" : "text-[#344C3D]"
+                        }`}
+                    >
+                      {category.name}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            {/* Subkategori */}
+            <Text className="mb-3 text-xs font-semibold text-[#858B83]">
+              Subkategori *
+            </Text>
+            <View className="mb-5 flex-row flex-wrap gap-2">
+              {subcategories.map((subcategory) => {
+                const isSelected = form.subcategoryId === subcategory.id;
+
+                return (
+                  <Pressable
+                    key={subcategory.id}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isSelected }}
+                    disabled={isSaving}
+                    onPress={() => update("subcategoryId", subcategory.id)}
+                    className={`rounded-full border px-3 py-2 ${isSelected
+                        ? "border-[#9DB59A] bg-[#DCE6D8]"
+                        : "border-[#E8E7E0] bg-white"
+                      }`}
+                  >
+                    <Text className="text-xs font-medium text-[#344C3D]">
+                      {subcategory.name}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            {/* Warna */}
+            <Text className="mb-2 text-xs font-semibold text-[#858B83]">
+              Warna
+            </Text>
+            <TextInput
+              value={form.color}
+              onChangeText={(value) => update("color", value)}
+              placeholder="Contoh: Putih, hitam, navy"
+              placeholderTextColor="#A5AAA2"
+              editable={!isSaving}
+              maxLength={100}
+              className="mb-5 rounded-xl border border-[#E8E7E0] bg-[#F8F7F2] px-4 py-3 text-sm text-[#26352C]"
+            />
+
+            {/* Catatan */}
+            <Text className="mb-2 text-xs font-semibold text-[#858B83]">
+              Catatan (opsional)
+            </Text>
+            <TextInput
+              value={form.notes}
+              onChangeText={(value) => update("notes", value)}
+              placeholder="Contoh: Cocok untuk acara santai"
+              placeholderTextColor="#A5AAA2"
+              editable={!isSaving}
+              multiline
+              maxLength={500}
+              textAlignVertical="top"
+              className="min-h-24 rounded-xl border border-[#E8E7E0] bg-[#F8F7F2] px-4 py-3 text-sm text-[#26352C]"
+            />
           </View>
 
           {error ? (

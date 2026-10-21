@@ -10,17 +10,22 @@ import {
 } from "react-native";
 
 import { CLOTHING_CATEGORIES } from "../../constants/categories";
+import type {
+  ClothingCategory,
+  ClothingCategoryId,
+  ClothingItem,
+} from "../../types/clothing";
 import {
   CATEGORY_EMOJIS,
   CATEGORY_LABELS,
   SUBCATEGORY_EMOJIS,
 } from "../../constants/wardrobe";
-import type { ClothingCategoryId, ClothingItem } from "../../types/clothing";
 import ActionButton from "../../components/ActionButton";
 import ClothingPhoto from "../../components/ClothingPhoto";
 
 type Props = {
   items: ClothingItem[];
+  categories: ClothingCategory[];
   isLoading: boolean;
   onAdd: () => void;
   onEdit: (item: ClothingItem) => void;
@@ -37,6 +42,7 @@ function formatDate(date: string) {
 
 export default function WardrobeScreen({
   items,
+  categories,
   isLoading,
   onAdd,
   onEdit,
@@ -51,9 +57,7 @@ export default function WardrobeScreen({
     const query = search.trim().toLowerCase();
 
     return items.filter((item) => {
-      const category = CLOTHING_CATEGORIES.find(
-        (entry) => entry.id === item.categoryId,
-      );
+      const category = categories.find((entry) => entry.id === item.categoryId);
 
       const subcategory = category?.subcategories.find(
         (entry) => entry.id === item.subcategoryId,
@@ -143,7 +147,7 @@ export default function WardrobeScreen({
             <View>
               <Text className="text-xs text-[#D4E0D2]">Kategori tersedia</Text>
               <Text className="mt-1 text-lg font-bold text-white">
-                {CLOTHING_CATEGORIES.length}
+                {categories.length}
               </Text>
             </View>
             <ActionButton label="+ Tambah barang" onPress={onAdd} />
@@ -210,7 +214,7 @@ export default function WardrobeScreen({
             </Text>
           </Pressable>
 
-          {CLOTHING_CATEGORIES.map((category) => (
+          {categories.map((category) => (
             <Pressable
               key={category.id}
               onPress={() => setActiveCategory(category.id)}
@@ -227,7 +231,7 @@ export default function WardrobeScreen({
                     : "text-[#646B61]"
                 }`}
               >
-                {CATEGORY_LABELS[category.id]}
+                {category.name}
               </Text>
             </Pressable>
           ))}
@@ -278,7 +282,7 @@ export default function WardrobeScreen({
         ) : (
           <View className="mt-5 flex-row flex-wrap justify-between">
             {filteredItems.map((item) => {
-              const category = CLOTHING_CATEGORIES.find(
+              const category = categories.find(
                 (entry) => entry.id === item.categoryId,
               );
 

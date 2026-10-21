@@ -1,16 +1,5 @@
 
-export type ClothingCategoryId =
-  | "tops"
-  | "bottoms"
-  | "one-piece"
-  | "religious-wear"
-  | "underwear-homewear"
-  | "headwear"
-  | "footwear"
-  | "socks"
-  | "bags"
-  | "accessories"
-  | "other";
+export type ClothingCategoryId = string;
 
 export type ClothingSubcategory = {
   id: string;
@@ -20,6 +9,7 @@ export type ClothingSubcategory = {
 export type ClothingCategory = {
   id: ClothingCategoryId;
   name: string;
+  isDefault: boolean;
   subcategories: ClothingSubcategory[];
 };
 
